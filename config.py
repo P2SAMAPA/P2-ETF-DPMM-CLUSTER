@@ -17,6 +17,7 @@ UNIVERSES = {
     ]
 }
 
+WINDOWS = [63, 252, 504, 1008, 2016]
 # Rolling window for return observations (days)
 OBSERVATION_WINDOW = 60
 
