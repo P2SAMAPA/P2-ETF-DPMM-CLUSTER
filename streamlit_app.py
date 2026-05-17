@@ -18,13 +18,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-header">🎲 Non‑Parametric Bayes ETF Clustering</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Dirichlet Process Mixture Model (DPMM) | Automatic cluster discovery | Membership probability in the best (highest‑return) cluster</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Dirichlet Process Mixture Model (DPMM) | Automatic cluster discovery | Membership probability in the best (highest‑return) cluster | Best window per ETF</div>', unsafe_allow_html=True)
 
 st.sidebar.markdown("## 🎲 DPMM Clustering")
 st.sidebar.markdown(f"**Run Date:** `{st.session_state.get('run_date', 'Not loaded')}`")
 st.sidebar.markdown(f"**Next Trading Day:** `{next_trading_day()}`")
 st.sidebar.markdown(f"**Concentration α:** {config.ALPHA}")
 st.sidebar.markdown(f"**Max clusters:** {config.N_COMPONENTS}")
+st.sidebar.markdown("**Windows evaluated:** 63, 252, 504, 1008, 2016 days (best per ETF)")
 
 OUTPUT_REPO = config.OUTPUT_REPO
 HF_TOKEN = config.HF_TOKEN
@@ -82,21 +83,33 @@ for universe_name, uni_data in universes.items():
             <div class="etf-card">
                 <div class="etf-ticker">{etf['ticker']}</div>
                 <div class="etf-score">probability = {etf['prob_best_cluster']:.4f}</div>
+                <div class="etf-score">best window = {etf.get('best_window', 'N/A')}d</div>
             </div>
             """, unsafe_allow_html=True)
-    # Metrics
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Number of clusters discovered", uni_data.get("n_clusters", 0))
-    with col2:
-        st.metric("Best cluster mean return (daily)", f"{uni_data.get('best_cluster_mean_return', 0):.6f}")
-    # Full table
-    with st.expander("📋 Full ranking (all ETFs)"):
+    # Metrics (if available in the data)
+    if "n_clusters" in uni_data:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Number of clusters discovered", uni_data.get("n_clusters", 0))
+        with col2:
+            st.metric("Best cluster mean return (daily)", f"{uni_data.get('best_cluster_mean_return', 0):.6f}")
+    with st.expander("📋 Full ranking (all ETFs, best window per ETF)"):
         full = uni_data.get("full_scores", {})
         if full:
-            df = pd.DataFrame(list(full.items()), columns=["ETF", "Probability (Best Cluster)"])
-            df = df.sort_values("Probability (Best Cluster)", ascending=False)
+            rows = []
+            for ticker, info in full.items():
+                if isinstance(info, dict):
+                    score = info.get("score", 0.0)
+                    win = info.get("best_window", "N/A")
+                else:
+                    score = info
+                    win = "N/A"
+                rows.append({"ETF": ticker, "Probability (Best Cluster)": score, "Best Window": win})
+            df = pd.DataFrame(rows)
+            # Convert probability column to numeric and drop NaNs
+            df["Probability (Best Cluster)"] = pd.to_numeric(df["Probability (Best Cluster)"], errors='coerce')
+            df = df.dropna(subset=["Probability (Best Cluster)"]).sort_values("Probability (Best Cluster)", ascending=False)
             st.dataframe(df, use_container_width=True, hide_index=True)
     st.divider()
 
-st.caption("The Dirichlet Process Mixture Model (DPMM) automatically determines the number of clusters from ETF return statistics. The 'best' cluster is the one with the highest mean daily return. Higher probability = more likely to belong to that cluster.")
+st.caption("The Dirichlet Process Mixture Model (DPMM) automatically determines the number of clusters from ETF return statistics (mean, std, skew, kurt) over each rolling window. The 'best' cluster is the one with the highest mean return. For each ETF, we keep the highest membership probability across windows. Higher probability = more likely to belong to that cluster.")
