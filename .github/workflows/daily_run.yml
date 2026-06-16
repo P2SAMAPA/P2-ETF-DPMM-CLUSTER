@@ -2,7 +2,7 @@ name: Daily DPMM Clustering Run
 
 on:
   schedule:
-    - cron: '00 02 * * 1-6'
+    - cron: '40 02 * * 1-6'
   workflow_dispatch:
 
 jobs:
